@@ -1,0 +1,83 @@
+---
+- name: Install and Configure PostgreSQL
+  hosts: databases
+  become: yes
+  vars_files:
+    - ../misc/vault.yml
+  vars:
+    data_file_local: "../misc/test.sql"
+    data_file_remote: "/var/test.sql"
+    ansible_ssh_pipelining: true
+  tasks:
+    - name: 1. Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: 2. Install PostgreSQL & psycopg2
+      apt:
+        name:
+          - postgresql
+          - python3-psycopg2
+        state: present
+
+    - name: 3. Ensure PostgreSQL is running
+      service:
+        name: postgresql
+        state: started
+        enabled: yes
+
+    - name: 4. Get PostgreSQL version
+      shell: psql -V | grep -oP '(?<=psql \(PostgreSQL\) )[^.]+'
+      register: pg_version
+      changed_when: false
+
+    - name: 5. Set PostgreSQL version fact
+      set_fact:
+        postgres_version: "{{ pg_version.stdout.strip() }}"
+
+    - name: 6. Configure PostgreSQL to listen on all interfaces
+      lineinfile:
+        path: "/etc/postgresql/{{ postgres_version }}/main/postgresql.conf"
+        regexp: '^#?listen_addresses\s*='
+        line: "listen_addresses = '*'"
+        state: present
+
+    - name: 7. Allow a specific remote connection in pg_hba.conf
+      lineinfile:
+        path: "/etc/postgresql/{{ postgres_version }}/main/pg_hba.conf"
+        line: "host {{ db_name }} {{ db_user }} {{ remote_address }}/32 md5"
+        state: present
+
+    - name: 8. Restart PostgreSQL to apply changes
+      service:
+        name: postgresql
+        state: restarted
+
+    - name: 9. Create a new PostgreSQL role
+      postgresql_user:
+        name: "{{ db_user }}"
+        password: "{{ db_pass }}"
+        role_attr_flags: LOGIN
+      become: true
+      become_user: postgres
+
+    - name: 10. Create PostgreSQL Database
+      postgresql_db:
+        state: present
+        name: "{{ db_name }}"
+        owner: "{{ db_user }}"
+      become: true
+      become_user: postgres
+
+    - name: 11. Transfer SQL data file to remote
+      copy:
+        src: "{{ data_file_local }}"
+        dest: "{{ data_file_remote }}"
+
+    - name: 12. Import transfered SQL data into the database
+      postgresql_query:
+        db: "{{ db_name }}"
+        login_user: "{{ db_user }}"
+        login_password: "{{ db_pass }}"
+        login_host: "127.0.0.1"
+        path_to_script: "{{ data_file_remote }}"

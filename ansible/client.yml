@@ -1,0 +1,60 @@
+---
+- name: Configure Client VM
+  hosts: clients
+  become: yes
+  vars_files:
+    - ../misc/vault.yml
+  tasks:
+    - name: 1. Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: 2. Install necessary packages
+      apt:
+        name: [gnupg2, software-properties-common, sshpass]
+        state: present
+
+    - name: 3. Enable X11 Forwarding
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "^#?X11Forwarding"
+        line: "X11Forwarding yes"
+
+    - name: 4. restart sshd
+      service:
+        name: ssh
+        state: restarted
+
+    - name: 5. Add Opera GPG key
+      apt_key:
+        url: https://deb.opera.com/archive.key
+        state: present
+
+    - name: 6. Add Opera repository
+      apt_repository:
+        repo: deb [arch=amd64] https://deb.opera.com/opera-stable/ stable non-free
+        state: present
+        filename: opera
+
+    - name: 7. Update apt cache after adding new repository
+      apt:
+        update_cache: yes
+
+    - name: 8. Install Opera
+      apt:
+        name: opera-stable
+        state: latest
+
+    - name: 9. Update /etc/hosts entry for ogates.lt
+      lineinfile:
+        path: /etc/hosts
+        regexp: '^127\.0\.0\.1\s+localhost'
+        line: "127.0.0.1 ogates.lt www.ogates.lt"
+
+    - name: 10. Create a persistent SSH tunnel
+      shell: |
+        sshpass -p {{ ansible_ssh_pass }} ssh -f -N -L 80:localhost:80 {{ webserver_user }}@{{ webserver_host }} -p {{ webserver_ssh_port }}
+      async: 20
+      poll: 0
+      become: yes
+      ignore_errors: yes

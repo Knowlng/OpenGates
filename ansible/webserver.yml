@@ -1,0 +1,113 @@
+---
+- name: Install and Configure Apache2 & PHP
+  hosts: webservers
+  become: yes
+  vars_files:
+    - ../misc/vault.yml
+  vars:
+    website_folder_local: "../web/webserver/"
+    website_folder_remote: "/var/www/html"
+    vm_scripts_folder_local: "../shell/scripts/"
+    vm_scripts_folder_remote: "/var/www/"
+
+  tasks:
+    - name: 1. Install gnupg (Needed for apt_key)
+      apt:
+        name: gnupg
+        state: present
+
+    - name: 2. Add OpenNebula Repository Key
+      apt_key:
+        url: https://downloads.opennebula.org/repo/repo.key
+        state: present
+
+    - name: 3. Add OpenNebula Repository
+      apt_repository:
+        repo: deb https://downloads.opennebula.io/repo/5.6/Debian/9/ stable opennebula
+        state: present
+        filename: opennebula
+
+    - name: 4. Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: 5. Install OpenNebula CLI tools
+      apt:
+        name: opennebula-tools
+        state: present
+
+    - name: 6. Install Apache2
+      apt:
+        name: apache2
+        state: present
+
+    - name: 7. Start Apache2
+      service:
+        name: apache2
+        state: started
+        enabled: yes
+
+    - name: 8. Ensure Apache2 is running on startup
+      service:
+        name: apache2
+        enabled: yes
+
+    - name: 9. Verify that Apache2 is running
+      service:
+        name: apache2
+        state: started
+        enabled: yes
+
+    - name: 10. Enable Apache rewrite engine
+      command: a2enmod rewrite
+
+    - name: 11. Enable .htaccess files support inside Apache2 configuration for /var/www directory
+      replace:
+        path: /etc/apache2/apache2.conf
+        regexp: "(<Directory[ \\t]+/var/www/>[^<]*AllowOverride[ \\t]+)None"
+        replace: "\\1All"
+
+    - name: 11. Remove default Apache2 html
+      file:
+        path: /var/www/html
+        state: absent
+
+    - name: 12. Copy website source folder to webserver VM
+      ansible.builtin.copy:
+        src: "{{ website_folder_local }}"
+        dest: "{{ website_folder_remote }}"
+
+    - name: 13. Copy VM creation/info shell scripts to webserver VM
+      copy:
+        src: "{{ vm_scripts_folder_local}}"
+        dest: "{{ vm_scripts_folder_remote}}"
+        mode: preserve
+
+    - name: 14. Modify .htaccess file for database credentials
+      lineinfile:
+        path: /var/www/html/.htaccess
+        regexp: "^SetEnv {{ item.key }}"
+        line: 'SetEnv {{ item.key }} "{{ item.value }}"'
+      loop:
+        - { key: "DB_HOST", value: "{{ db_host }}" }
+        - { key: "DB_NAME", value: "{{ db_name }}" }
+        - { key: "DB_USER", value: "{{ db_user }}" }
+        - { key: "DB_PASSWORD", value: "{{ db_pass }}" }
+        - { key: "VM_USER", value: "{{ vm_user }}" }
+        - { key: "VM_PASSWORD", value: "{{ vm_password }}" }
+      no_log: True
+
+    - name: 15. Install php
+      apt:
+        name: php
+        state: present
+
+    - name: 16. Install Postgresql driver for php
+      apt:
+        name: php-pgsql
+        state: present
+
+    - name: 17. Restart Apache2 to apply changes
+      service:
+        name: apache2
+        state: restarted

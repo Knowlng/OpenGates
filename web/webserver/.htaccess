@@ -1,0 +1,12 @@
+SetEnv DB_HOST 
+SetEnv DB_NAME 
+SetEnv DB_USER 
+SetEnv DB_PASSWORD 
+SetEnv VM_USER
+SetEnv VM_PASS
+
+RewriteEngine On
+RewriteBase /
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ index.php [L,QSA]

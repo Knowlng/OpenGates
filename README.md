@@ -2,6 +2,16 @@
 
 **This project was successfully completed through team collaboration during the `Virtualization basics` course at Vilnius University.**
 
+**Team members:**
+
+*Čepulis Nerijus*
+
+*Kabišaitytė Evelina*
+
+*Maciūnas Adrijanas Juozas*
+
+*Petkevičius Lukas*
+
 ## Project objective
 
 This project aims to develop a telecommunications company website. The site will include interconnected HTML windows with links to various pages. Additionally, the company should be able to offer its servers as a service for performing telecommunication functions, such as providing `OpenNebula` resource VMs.
